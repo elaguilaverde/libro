@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Libro — gestor de negocio</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1F2B22">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./css/estilos.css">
+</head>
+<body>
+
+<header class="spine">
+  <h1>Libro</h1>
+  <span class="tag">tu negocio, guardado solo en tu dispositivo</span>
+</header>
+
+<nav class="tabs">
+  <button data-tab="dash" class="active">Resumen</button>
+  <button data-tab="mov">Ventas y gastos</button>
+  <button data-tab="inv">Inventario</button>
+  <button data-tab="cta">Cuentas</button>
+</nav>
+
+<main>
+  <!-- RESUMEN -->
+  <section class="panel active" id="panel-dash">
+    <div class="cards-row">
+      <div class="metric pos"><div class="label">Ingresos (todo el historial)</div><div class="value" id="m-ing">$0</div></div>
+      <div class="metric neg"><div class="label">Gastos (todo el historial)</div><div class="value" id="m-gas">$0</div></div>
+      <div class="metric"><div class="label">Utilidad</div><div class="value" id="m-util">$0</div></div>
+      <div class="metric"><div class="label">Cuentas pendientes</div><div class="value" id="m-pend">$0</div></div>
+    </div>
+    <table class="ledger" id="tabla-recientes"><thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Monto</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <!-- MOVIMIENTOS -->
+  <section class="panel" id="panel-mov">
+    <form class="entry" id="form-mov">
+      <div class="field"><label>Fecha</label><input name="fecha" type="date" required></div>
+      <div class="field"><label>Tipo</label>
+        <select name="tipo"><option value="venta">Venta / ingreso</option><option value="gasto">Gasto</option></select>
+      </div>
+      <div class="field"><label>Producto (opcional)</label>
+        <select name="producto_id" class="producto-select-live"></select>
+      </div>
+      <div class="field"><label>Cantidad</label><input name="cantidad" type="number" step="1" min="1" value="1"></div>
+      <div class="field"><label>Monto</label><input name="monto" type="number" step="0.01" required></div>
+      <div class="field"><label>Categoría</label><input name="categoria" placeholder="Ej: mercadería" required></div>
+      <div class="field"><label>Descripción</label><input name="nota" placeholder="Ej: venta mostrador"></div>
+      <button type="submit">Registrar</button>
+    </form>
+    <table class="ledger" id="tabla-mov"><thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Producto</th><th>Descripción</th><th>Monto</th><th></th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <!-- INVENTARIO -->
+  <section class="panel" id="panel-inv">
+    <form class="entry" id="form-inv">
+      <div class="field"><label>Producto</label><input name="nombre" required></div>
+      <div class="field"><label>Precio</label><input name="precio" type="number" step="0.01" required></div>
+      <div class="field"><label>Stock</label><input name="stock" type="number" required></div>
+      <div class="field"><label>Stock mínimo</label><input name="stock_minimo" type="number" value="1"></div>
+      <button type="submit">Agregar</button>
+    </form>
+    <table class="ledger" id="tabla-inv"><thead><tr><th>Producto</th><th>Precio</th><th>Stock</th><th></th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <!-- CUENTAS -->
+  <section class="panel" id="panel-cta">
+    <form class="entry" id="form-cta">
+      <div class="field"><label>Contacto</label><input name="contacto" required></div>
+      <div class="field"><label>Tipo</label>
+        <select name="tipo"><option value="por_cobrar">Me deben (cliente)</option><option value="por_pagar">Debo (proveedor)</option></select>
+      </div>
+      <div class="field"><label>Monto</label><input name="monto" type="number" step="0.01" required></div>
+      <div class="field"><label>Vence</label><input name="vencimiento" type="date"></div>
+      <button type="submit">Registrar deuda</button>
+    </form>
+    <table class="ledger" id="tabla-cta"><thead><tr><th>Contacto</th><th>Tipo</th><th>Monto</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table>
+  </section>
+</main>
+
+<div class="modal-overlay" id="modal-edit">
+  <div class="modal">
+    <h3 id="modal-title">Editar</h3>
+    <div id="modal-fields"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="modal-cancel" type="button">Cancelar</button>
+      <button class="btn" id="modal-save" type="button">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<div class="filebar">
+  <button class="btn" id="btn-export">Guardar copia (.sqlite)</button>
+  <label class="btn ghost" style="cursor:pointer;">Abrir copia
+    <input type="file" id="file-import" accept=".sqlite,.db" style="display:none;">
+  </label>
+  <button class="btn gold" id="btn-share">Enviar a otro dispositivo</button>
+  <span class="status" id="status">iniciando…</span>
+</div>
+
+<div class="update-banner" id="update-banner">
+  <span>Hay una versión nueva de la app disponible.</span>
+  <button id="update-reload" type="button">Actualizar ahora</button>
+</div>
+
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
