@@ -19,6 +19,19 @@ function currentFile(){
   return new File([exportBytes()], "libro-negocio.sqlite", { type: "application/x-sqlite3" });
 }
 
+// Descarga directa a la carpeta de descargas del usuario
+function descargarCopiaDirecta(){
+  const file = currentFile();
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 async function guardarCopia(){
   if (canUseRealFile){
     try{
@@ -35,19 +48,13 @@ async function guardarCopia(){
       await writable.close();
       setStatus("archivo actualizado directamente en tu disco (mismo archivo cada vez)");
       return;
-    }catch(err){ /* canceló o falló: sigue abajo */ }
+    }catch(err){ /* canceló o falló: sigue abajo con descarga normal */ }
   }
-  const file = currentFile();
-  const url = URL.createObjectURL(file);
-  const a = document.createElement("a");
-  a.href = url; a.download = file.name;
-  a.click();
-  URL.revokeObjectURL(url);
+  descargarCopiaDirecta();
   setStatus("copia .sqlite descargada a tu dispositivo");
 }
 
 function exportarTodoCsv(){
-  // 1. Transacciones
   const movs = query(`
     SELECT t.fecha, t.tipo, t.categoria, COALESCE(p.nombre, '') AS producto,
            COALESCE(t.cantidad, '') AS cantidad, t.forma_pago, COALESCE(t.nota, '') AS nota, t.monto
@@ -56,10 +63,7 @@ function exportarTodoCsv(){
     ORDER BY t.fecha DESC, t.id DESC
   `);
 
-  // 2. Inventario
   const inv = query(`SELECT nombre, precio, stock, stock_minimo FROM productos ORDER BY nombre ASC`);
-
-  // 3. Cuentas
   const ctas = query(`SELECT contacto, tipo, monto, COALESCE(vencimiento, '') AS vencimiento, estado FROM cuentas ORDER BY id DESC`);
 
   const escapeCell = val => `"${String(val ?? '').replace(/"/g, '""')}"`;
@@ -113,14 +117,37 @@ export function initArchivo(){
 
   document.getElementById("btn-share").addEventListener("click", async ()=>{
     const file = currentFile();
-    if (navigator.canShare && navigator.canShare({ files:[file] })){
-      try{
-        await navigator.share({ files:[file], title:"Libro de mi negocio" });
-        setStatus("compartido — elige Bluetooth, WiFi Direct, WhatsApp o correo en el panel del sistema");
-      }catch(err){ setStatus("envío cancelado"); }
-    } else {
-      setStatus("este navegador no soporta compartir archivos: se descargó una copia para enviar manualmente");
-      guardarCopia();
+
+    // 1. Si el navegador soporta compartir el archivo nativamente (ej: móviles)
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: "Libro de mi negocio",
+          text: "Copia de respaldo de Libro"
+        });
+        setStatus("compartido — archivo enviado desde el menú del sistema");
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          setStatus("envío cancelado");
+          return;
+        }
+      }
     }
+
+    // 2. Si no es compatible (navegador en PC / Linux / Windows):
+    descargarCopiaDirecta();
+    setStatus("copia 'libro-negocio.sqlite' lista en tus Descargas para transferir");
+
+    alert(
+      "📦 Copia lista para transferir\n\n" +
+      "Se ha descargado el archivo 'libro-negocio.sqlite' a tu carpeta de Descargas.\n\n" +
+      "Para pasarlo a tu otro dispositivo:\n" +
+      "1. Envíate el archivo por WhatsApp Web, Telegram, correo o Drive.\n" +
+      "2. En el otro dispositivo, abre Libro.\n" +
+      "3. Toca 'Abrir copia' y selecciona 'libro-negocio.sqlite'.\n\n" +
+      "¡Se sincronizará todo tu negocio con tus fotos y movimientos!"
+    );
   });
 }
