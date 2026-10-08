@@ -9,6 +9,59 @@
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
 <link rel="stylesheet" href="./css/estilos.css">
+<style>
+  /* Ajustes sutiles para los componentes integrados */
+  .tools-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    justify-content: space-between;
+    margin: 1rem 0;
+  }
+  .filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .filter-group button.active {
+    background: #1F2B22;
+    color: #fff;
+    font-weight: 600;
+  }
+  .filter-dates {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.88rem;
+  }
+  .filter-dates input[type="date"] {
+    padding: 0.25rem 0.45rem;
+    font-size: 0.85rem;
+  }
+  .search-input {
+    min-width: 200px;
+    flex: 1;
+    max-width: 340px;
+    padding: 0.4rem 0.6rem;
+  }
+  .month-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.2rem;
+    align-items: center;
+    background: rgba(31, 43, 34, 0.05);
+    border: 1px solid rgba(31, 43, 34, 0.12);
+    border-radius: 6px;
+    padding: 0.6rem 0.9rem;
+    margin-bottom: 1.2rem;
+    font-size: 0.9rem;
+  }
+  .month-strip strong {
+    color: #1F2B22;
+  }
+</style>
 </head>
 <body>
 
@@ -21,19 +74,58 @@
   <button data-tab="dash" class="active">Resumen</button>
   <button data-tab="mov">Ventas y gastos</button>
   <button data-tab="inv">Inventario</button>
+  <button data-tab="cat">Catálogo</button>
   <button data-tab="cta">Cuentas</button>
 </nav>
 
 <main>
   <!-- RESUMEN -->
   <section class="panel active" id="panel-dash">
-    <div class="cards-row">
-      <div class="metric pos"><div class="label">Ingresos (todo el historial)</div><div class="value" id="m-ing">$0</div></div>
-      <div class="metric neg"><div class="label">Gastos (todo el historial)</div><div class="value" id="m-gas">$0</div></div>
-      <div class="metric"><div class="label">Utilidad</div><div class="value" id="m-util">$0</div></div>
-      <div class="metric"><div class="label">Cuentas pendientes</div><div class="value" id="m-pend">$0</div></div>
+    <div class="tools-bar">
+      <div class="filter-group" id="dash-presets">
+        <button type="button" class="btn ghost" data-period="hoy">Hoy</button>
+        <button type="button" class="btn ghost" data-period="semana">Esta semana</button>
+        <button type="button" class="btn ghost active" data-period="mes">Este mes</button>
+        <button type="button" class="btn ghost" data-period="todo">Todo</button>
+      </div>
+      <div class="filter-dates">
+        <label>Desde: <input type="date" id="dash-desde"></label>
+        <label>Hasta: <input type="date" id="dash-hasta"></label>
+      </div>
     </div>
-    <table class="ledger" id="tabla-recientes"><thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Monto</th></tr></thead><tbody></tbody></table>
+
+    <div class="month-strip">
+      <span><strong>Mes actual:</strong></span>
+      <span>Ingresos: <strong id="m-mes-ing">$0</strong></span>
+      <span>Gastos: <strong id="m-mes-gas">$0</strong></span>
+      <span>Utilidad: <strong id="m-mes-util">$0</strong></span>
+    </div>
+
+    <div class="cards-row">
+      <div class="metric pos">
+        <div class="label" id="lbl-ing">Ingresos (este mes)</div>
+        <div class="value" id="m-ing">$0</div>
+      </div>
+      <div class="metric neg">
+        <div class="label" id="lbl-gas">Gastos (este mes)</div>
+        <div class="value" id="m-gas">$0</div>
+      </div>
+      <div class="metric">
+        <div class="label" id="lbl-util">Utilidad (este mes)</div>
+        <div class="value" id="m-util">$0</div>
+      </div>
+      <div class="metric">
+        <div class="label">Cuentas pendientes</div>
+        <div class="value" id="m-pend">$0</div>
+      </div>
+    </div>
+
+    <table class="ledger" id="tabla-recientes">
+      <thead>
+        <tr><th>Fecha</th><th>Tipo</th><th>Pago</th><th>Descripción</th><th>Monto</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </section>
 
   <!-- MOVIMIENTOS -->
@@ -48,11 +140,44 @@
       </div>
       <div class="field"><label>Cantidad</label><input name="cantidad" type="number" step="1" min="1" value="1"></div>
       <div class="field"><label>Monto</label><input name="monto" type="number" step="0.01" required></div>
-      <div class="field"><label>Categoría</label><input name="categoria" placeholder="Ej: mercadería" required></div>
+      <div class="field"><label>Forma de pago</label>
+        <select name="forma_pago">
+          <option value="efectivo">Efectivo</option>
+          <option value="transferencia">Transferencia</option>
+          <option value="tarjeta_debito">Tarjeta de débito</option>
+          <option value="tarjeta_credito">Tarjeta de crédito</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="field"><label>Categoría</label>
+        <input name="categoria" list="lista-categorias" placeholder="Ej: mercadería" required autocomplete="off">
+      </div>
       <div class="field"><label>Descripción</label><input name="nota" placeholder="Ej: venta mostrador"></div>
       <button type="submit">Registrar</button>
     </form>
-    <table class="ledger" id="tabla-mov"><thead><tr><th>Fecha</th><th>Tipo</th><th>Categoría</th><th>Producto</th><th>Descripción</th><th>Monto</th><th></th></tr></thead><tbody></tbody></table>
+
+    <datalist id="lista-categorias"></datalist>
+
+    <div class="tools-bar">
+      <input type="search" id="busq-mov" class="search-input" placeholder="Buscar por categoría, producto, nota...">
+      <button type="button" class="btn ghost" id="btn-export-csv-mov">Exportar movimientos a CSV</button>
+    </div>
+
+    <table class="ledger" id="tabla-mov">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Tipo</th>
+          <th>Categoría</th>
+          <th>Producto</th>
+          <th>Pago</th>
+          <th>Descripción</th>
+          <th>Monto</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </section>
 
   <!-- INVENTARIO -->
@@ -64,7 +189,51 @@
       <div class="field"><label>Stock mínimo</label><input name="stock_minimo" type="number" value="1"></div>
       <button type="submit">Agregar</button>
     </form>
-    <table class="ledger" id="tabla-inv"><thead><tr><th>Producto</th><th>Precio</th><th>Stock</th><th></th></tr></thead><tbody></tbody></table>
+
+    <div class="tools-bar">
+      <input type="search" id="busq-inv" class="search-input" placeholder="Buscar por nombre de producto...">
+    </div>
+
+    <table class="ledger" id="tabla-inv">
+      <thead><tr><th>Producto</th><th>Precio</th><th>Stock</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- CATÁLOGO -->
+  <section class="panel" id="panel-cat">
+    <form class="entry" id="form-cat">
+      <div class="field">
+        <label>Producto</label>
+        <input name="nombre" required placeholder="Ej: Remera lisa blanca">
+      </div>
+      <div class="field">
+        <label>Precio</label>
+        <input name="precio" type="number" step="0.01" required placeholder="0.00">
+      </div>
+      <div class="field">
+        <label>Descripción (opcional)</label>
+        <input name="descripcion" placeholder="Ej: 100% algodón, talles S al XL">
+      </div>
+      <div class="field">
+        <label>Foto (se comprime automáticamente)</label>
+        <input type="file" id="cat-foto-input" accept="image/*">
+        <input type="hidden" name="foto" id="cat-foto-base64">
+      </div>
+      <div id="cat-foto-preview-wrap" class="cat-preview-box" style="display:none;">
+        <img id="cat-foto-preview" src="" alt="Vista previa">
+        <button type="button" id="cat-foto-remove" class="del">quitar</button>
+      </div>
+      <button type="submit">Agregar al catálogo</button>
+    </form>
+
+    <div class="tools-bar">
+      <input type="search" id="busq-cat" class="search-input" placeholder="Buscar en catálogo...">
+      <button type="button" class="btn gold" id="btn-descargar-pdf-cat">Descargar Catálogo en PDF</button>
+    </div>
+
+    <!-- Grilla de productos del catálogo -->
+    <div class="cat-grid" id="cat-grid"></div>
   </section>
 
   <!-- CUENTAS -->
@@ -78,7 +247,15 @@
       <div class="field"><label>Vence</label><input name="vencimiento" type="date"></div>
       <button type="submit">Registrar deuda</button>
     </form>
-    <table class="ledger" id="tabla-cta"><thead><tr><th>Contacto</th><th>Tipo</th><th>Monto</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table>
+
+    <div class="tools-bar">
+      <input type="search" id="busq-cta" class="search-input" placeholder="Buscar por contacto o estado...">
+    </div>
+
+    <table class="ledger" id="tabla-cta">
+      <thead><tr><th>Contacto</th><th>Tipo</th><th>Monto</th><th>Vence</th><th>Estado</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
   </section>
 </main>
 
@@ -98,6 +275,7 @@
   <label class="btn ghost" style="cursor:pointer;">Abrir copia
     <input type="file" id="file-import" accept=".sqlite,.db" style="display:none;">
   </label>
+  <button class="btn ghost" id="btn-export-csv-all">Exportar todo a CSV</button>
   <button class="btn gold" id="btn-share">Enviar a otro dispositivo</button>
   <span class="status" id="status">iniciando…</span>
 </div>
@@ -107,6 +285,8 @@
   <button id="update-reload" type="button">Actualizar ahora</button>
 </div>
 
+<!-- Librería local para exportar PDFs -->
+<script src="./vendor/jspdf.umd.min.js"></script>
 <script type="module" src="./js/main.js"></script>
 </body>
 </html>

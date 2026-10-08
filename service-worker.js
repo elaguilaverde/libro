@@ -1,7 +1,7 @@
 // service-worker.js
 // CAMBIÁ ESTA VERSIÓN cada vez que subas cambios de código — es lo que le
 // avisa al navegador de cada usuario que hay una versión nueva para bajar.
-const CACHE_VERSION = "libro-v1";
+const CACHE_VERSION = "libro-v2";
 
 const ASSETS = [
   "./",
@@ -13,11 +13,13 @@ const ASSETS = [
   "./js/dashboard.js",
   "./js/movimientos.js",
   "./js/inventario.js",
+  "./js/catalogo.js",
   "./js/cuentas.js",
   "./js/archivo.js",
   "./js/main.js",
   "./vendor/sql-wasm.js",
   "./vendor/sql-wasm.wasm",
+  "./vendor/jspdf.umd.min.js",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
 ];

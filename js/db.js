@@ -17,18 +17,20 @@ function idbOpen(){
     req.onerror = () => reject(req.error);
   });
 }
+
 export async function idbGet(key){
   const conn = await idbOpen();
   return new Promise((resolve, reject)=>{
-    const tx = conn.transaction("kv","readonly").objectStore("kv").get(key);
+    const tx = conn.transaction("kv", "readonly").objectStore("kv").get(key);
     tx.onsuccess = () => resolve(tx.result);
     tx.onerror = () => reject(tx.error);
   });
 }
+
 export async function idbSet(key, val){
   const conn = await idbOpen();
   return new Promise((resolve, reject)=>{
-    const tx = conn.transaction("kv","readwrite").objectStore("kv").put(val, key);
+    const tx = conn.transaction("kv", "readwrite").objectStore("kv").put(val, key);
     tx.onsuccess = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -44,6 +46,7 @@ function loadScriptTag(src){
     document.head.appendChild(s);
   });
 }
+
 async function loadSqlEngine(){
   try{
     await loadScriptTag('./vendor/sql-wasm.js');
@@ -59,6 +62,18 @@ function migrate(){
   const cols = query("PRAGMA table_info(transacciones)").map(c => c.name);
   if (!cols.includes('producto_id')) db.run("ALTER TABLE transacciones ADD COLUMN producto_id INTEGER");
   if (!cols.includes('cantidad')) db.run("ALTER TABLE transacciones ADD COLUMN cantidad REAL");
+  if (!cols.includes('forma_pago')) db.run("ALTER TABLE transacciones ADD COLUMN forma_pago TEXT DEFAULT 'efectivo'");
+
+  // Crea la tabla catalogo si aún no existe en bases anteriores
+  db.run(`
+    CREATE TABLE IF NOT EXISTS catalogo(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre TEXT,
+      precio REAL,
+      descripcion TEXT,
+      foto TEXT
+    );
+  `);
 }
 
 export async function initDb(){
@@ -72,9 +87,39 @@ export async function initDb(){
   } else {
     db = new SQL.Database();
     db.run(`
-      CREATE TABLE transacciones(id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, tipo TEXT, categoria TEXT, nota TEXT, monto REAL, producto_id INTEGER, cantidad REAL);
-      CREATE TABLE productos(id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT, precio REAL, stock INTEGER, stock_minimo INTEGER);
-      CREATE TABLE cuentas(id INTEGER PRIMARY KEY AUTOINCREMENT, contacto TEXT, tipo TEXT, monto REAL, vencimiento TEXT, estado TEXT DEFAULT 'pendiente');
+      CREATE TABLE transacciones(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fecha TEXT,
+        tipo TEXT,
+        categoria TEXT,
+        nota TEXT,
+        monto REAL,
+        producto_id INTEGER,
+        cantidad REAL,
+        forma_pago TEXT DEFAULT 'efectivo'
+      );
+      CREATE TABLE productos(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT,
+        precio REAL,
+        stock INTEGER,
+        stock_minimo INTEGER
+      );
+      CREATE TABLE cuentas(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        contacto TEXT,
+        tipo TEXT,
+        monto REAL,
+        vencimiento TEXT,
+        estado TEXT DEFAULT 'pendiente'
+      );
+      CREATE TABLE catalogo(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT,
+        precio REAL,
+        descripcion TEXT,
+        foto TEXT
+      );
     `);
   }
   migrate();
@@ -101,12 +146,10 @@ export function query(sql, params=[]){
   return values.map(row => Object.fromEntries(row.map((v,i)=>[columns[i],v])));
 }
 
-// Ejecuta sin guardar todavía — útil para agrupar varios pasos (ej: insertar
-// una venta + descontar stock) y guardar/avisar una sola vez con commit().
+// Ejecuta sin guardar todavía — útil para agrupar varios pasos
 export function rawRun(sql, params=[]){ db.run(sql, params); }
 
-// Guarda en IndexedDB y avisa a todos los módulos que algo cambió,
-// para que cada uno se repinte solo (patrón publicar/suscribir).
+// Guarda en IndexedDB y avisa a todos los módulos que algo cambió
 export async function commit(){
   await persist();
   document.dispatchEvent(new Event('libro:changed'));

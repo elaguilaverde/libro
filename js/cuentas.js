@@ -3,6 +3,8 @@
 import { query, exec } from './db.js';
 import { money, buildFieldsHtml, showEditModal } from './ui.js';
 
+let searchQuery = "";
+
 const EDIT_FIELDS = [
   { name:'contacto', label:'Contacto', type:'text' },
   { name:'tipo', label:'Tipo', type:'select', options:[['por_cobrar','Me deben'],['por_pagar','Debo']] },
@@ -12,23 +14,35 @@ const EDIT_FIELDS = [
 ];
 
 function render(){
-  const rows = query("SELECT * FROM cuentas ORDER BY id DESC");
+  const allRows = query("SELECT * FROM cuentas ORDER BY id DESC");
+  const q = searchQuery.toLowerCase();
+  const rows = q ? allRows.filter(r =>
+    (r.contacto && r.contacto.toLowerCase().includes(q)) ||
+    (r.estado && r.estado.toLowerCase().includes(q)) ||
+    (r.tipo && (r.tipo === 'por_cobrar' ? 'me deben' : 'debo').includes(q))
+  ) : allRows;
+
   const body = document.querySelector("#tabla-cta tbody");
-  body.innerHTML = rows.length ? rows.map(r=>`
-    <tr><td>${r.contacto}</td><td>${r.tipo==='por_cobrar'?'me deben':'debo'}</td><td>${money(r.monto)}</td>
-    <td>${r.vencimiento||"—"}</td><td>${r.estado}</td>
-    <td>
-      ${r.estado==='pendiente'?`<button class="del" data-pay-cta="${r.id}">marcar pagado</button>`:""}
-      <button class="del" data-edit-cta="${r.id}">editar</button>
-      <button class="del" data-del-cta="${r.id}">eliminar</button>
-    </td></tr>
-  `).join("") : `<tr><td colspan="6" class="empty">No hay cuentas por cobrar ni por pagar.</td></tr>`;
+  body.innerHTML = rows.length ? rows.map(r => `
+    <tr>
+      <td>${r.contacto}</td>
+      <td>${r.tipo === 'por_cobrar' ? 'me deben' : 'debo'}</td>
+      <td>${money(r.monto)}</td>
+      <td>${r.vencimiento || "—"}</td>
+      <td>${r.estado}</td>
+      <td>
+        ${r.estado === 'pendiente' ? `<button class="del" data-pay-cta="${r.id}">marcar pagado</button>` : ""}
+        <button class="del" data-edit-cta="${r.id}">editar</button>
+        <button class="del" data-del-cta="${r.id}">eliminar</button>
+      </td>
+    </tr>
+  `).join("") : `<tr><td colspan="6" class="empty">${searchQuery ? 'No se encontraron cuentas con esa búsqueda.' : 'No hay cuentas por cobrar ni por pagar.'}</td></tr>`;
 }
 
 function openEdit(id){
   const row = query("SELECT * FROM cuentas WHERE id=?", [id])[0];
   if (!row) return;
-  showEditModal("Editar cuenta", buildFieldsHtml(EDIT_FIELDS, row), values=>{
+  showEditModal("Editar cuenta", buildFieldsHtml(EDIT_FIELDS, row), values => {
     exec("UPDATE cuentas SET contacto=?, tipo=?, monto=?, vencimiento=?, estado=? WHERE id=?",
       [values.contacto, values.tipo, parseFloat(values.monto), values.vencimiento, values.estado, id]);
   });
@@ -37,15 +51,24 @@ function openEdit(id){
 export function initCuentas(){
   document.addEventListener('libro:changed', render);
 
-  document.getElementById("form-cta").addEventListener("submit", e=>{
+  document.getElementById("form-cta").addEventListener("submit", e => {
     e.preventDefault();
     const f = new FormData(e.target);
-    exec("INSERT INTO cuentas(contacto,tipo,monto,vencimiento) VALUES (?,?,?,?)",
+    exec("INSERT INTO cuentas(contacto, tipo, monto, vencimiento) VALUES (?,?,?,?)",
       [f.get("contacto"), f.get("tipo"), parseFloat(f.get("monto")), f.get("vencimiento")]);
     e.target.reset();
   });
 
-  document.body.addEventListener("click", e=>{
+  // Búsqueda en vivo de cuentas
+  const busq = document.getElementById("busq-cta");
+  if (busq) {
+    busq.addEventListener("input", e => {
+      searchQuery = e.target.value.trim();
+      render();
+    });
+  }
+
+  document.body.addEventListener("click", e => {
     if (e.target.dataset.editCta) openEdit(e.target.dataset.editCta);
     if (e.target.dataset.payCta) exec("UPDATE cuentas SET estado='pagado' WHERE id=?", [e.target.dataset.payCta]);
     if (e.target.dataset.delCta) exec("DELETE FROM cuentas WHERE id=?", [e.target.dataset.delCta]);

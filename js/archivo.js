@@ -1,7 +1,7 @@
-// archivo.js — todo lo que entra o sale del dispositivo como archivo .sqlite.
+// archivo.js — todo lo que entra o sale del dispositivo (.sqlite y .csv).
 
-import { exportBytes, loadFromBytes, idbGet, idbSet } from './db.js';
-import { setStatus } from './ui.js';
+import { exportBytes, loadFromBytes, idbGet, idbSet, query } from './db.js';
+import { setStatus, toLocalIsoDate } from './ui.js';
 
 const HANDLE_KEY = "libro_file_handle";
 const canUseRealFile = 'showSaveFilePicker' in window;
@@ -46,10 +46,62 @@ async function guardarCopia(){
   setStatus("copia .sqlite descargada a tu dispositivo");
 }
 
+function exportarTodoCsv(){
+  // 1. Transacciones
+  const movs = query(`
+    SELECT t.fecha, t.tipo, t.categoria, COALESCE(p.nombre, '') AS producto,
+           COALESCE(t.cantidad, '') AS cantidad, t.forma_pago, COALESCE(t.nota, '') AS nota, t.monto
+    FROM transacciones t
+    LEFT JOIN productos p ON p.id = t.producto_id
+    ORDER BY t.fecha DESC, t.id DESC
+  `);
+
+  // 2. Inventario
+  const inv = query(`SELECT nombre, precio, stock, stock_minimo FROM productos ORDER BY nombre ASC`);
+
+  // 3. Cuentas
+  const ctas = query(`SELECT contacto, tipo, monto, COALESCE(vencimiento, '') AS vencimiento, estado FROM cuentas ORDER BY id DESC`);
+
+  const escapeCell = val => `"${String(val ?? '').replace(/"/g, '""')}"`;
+  const formatLine = arr => arr.map(escapeCell).join(";");
+
+  const lines = [
+    formatLine(["REPORTE CONSOLIDADO DE NEGOCIO — LIBRO", toLocalIsoDate()]),
+    "",
+    formatLine(["=== 1. VENTAS Y GASTOS ==="]),
+    formatLine(["Fecha", "Tipo", "Categoría", "Producto", "Cantidad", "Forma de pago", "Descripción", "Monto"]),
+    ...movs.map(r => formatLine([r.fecha, r.tipo, r.categoria, r.producto, r.cantidad, r.forma_pago, r.nota, r.monto])),
+    "",
+    formatLine(["=== 2. INVENTARIO DE PRODUCTOS ==="]),
+    formatLine(["Producto", "Precio", "Stock Actual", "Stock Mínimo"]),
+    ...inv.map(r => formatLine([r.nombre, r.precio, r.stock, r.stock_minimo])),
+    "",
+    formatLine(["=== 3. CUENTAS (POR COBRAR / PAGAR) ==="]),
+    formatLine(["Contacto", "Tipo", "Monto", "Vencimiento", "Estado"]),
+    ...ctas.map(r => formatLine([r.contacto, r.tipo === 'por_cobrar' ? 'Me deben' : 'Debo', r.monto, r.vencimiento, r.estado]))
+  ];
+
+  const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `libro_completo_${toLocalIsoDate()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  setStatus("reporte completo exportado a CSV exitosamente");
+}
+
 export function initArchivo(){
   loadHandle();
 
   document.getElementById("btn-export").addEventListener("click", guardarCopia);
+
+  const btnExportAllCsv = document.getElementById("btn-export-csv-all");
+  if (btnExportAllCsv) {
+    btnExportAllCsv.addEventListener("click", exportarTodoCsv);
+  }
 
   document.getElementById("file-import").addEventListener("change", async e=>{
     const file = e.target.files[0];
