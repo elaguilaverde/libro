@@ -36,7 +36,7 @@ export async function idbSet(key, val){
   });
 }
 
-// ---------- Cargar el motor SQL: local primero, CDN como respaldo ----------
+// ---------- Cargar el motor SQL ----------
 function loadScriptTag(src){
   return new Promise((resolve, reject)=>{
     const s = document.createElement('script');
@@ -57,14 +57,13 @@ async function loadSqlEngine(){
   }
 }
 
-// ---------- Migraciones (para bases guardadas con un esquema más viejo) ----------
+// ---------- Migraciones ----------
 function migrate(){
   const cols = query("PRAGMA table_info(transacciones)").map(c => c.name);
   if (!cols.includes('producto_id')) db.run("ALTER TABLE transacciones ADD COLUMN producto_id INTEGER");
   if (!cols.includes('cantidad')) db.run("ALTER TABLE transacciones ADD COLUMN cantidad REAL");
   if (!cols.includes('forma_pago')) db.run("ALTER TABLE transacciones ADD COLUMN forma_pago TEXT DEFAULT 'efectivo'");
 
-  // Crea la tabla catalogo si aún no existe en bases anteriores
   db.run(`
     CREATE TABLE IF NOT EXISTS catalogo(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -126,7 +125,6 @@ export async function initDb(){
   await commit();
 }
 
-// Reemplaza la base actual por una importada desde un archivo .sqlite
 export async function loadFromBytes(bytes){
   db = new SQL.Database(bytes);
   migrate();
@@ -134,31 +132,35 @@ export async function loadFromBytes(bytes){
 }
 
 async function persist(){
+  if (!db) return;
   const bytes = db.export();
   await idbSet(DB_KEY, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
 }
 
-// ---------- Lectura / escritura ----------
+// ---------- Lectura / escritura protegidas ----------
 export function query(sql, params=[]){
+  if (!db) return [];
   const res = db.exec(sql, params);
   if (!res.length) return [];
   const [{columns, values}] = res;
   return values.map(row => Object.fromEntries(row.map((v,i)=>[columns[i],v])));
 }
 
-// Ejecuta sin guardar todavía — útil para agrupar varios pasos
-export function rawRun(sql, params=[]){ db.run(sql, params); }
+export function rawRun(sql, params=[]){
+  if (!db) return;
+  db.run(sql, params);
+}
 
-// Guarda en IndexedDB y avisa a todos los módulos que algo cambió
 export async function commit(){
   await persist();
   document.dispatchEvent(new Event('libro:changed'));
 }
 
-// Atajo para el caso común: una sola sentencia + guardar + avisar.
 export async function exec(sql, params=[]){
   rawRun(sql, params);
   await commit();
 }
 
-export function exportBytes(){ return db.export(); }
+export function exportBytes(){
+  return db ? db.export() : new Uint8Array();
+}
