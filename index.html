@@ -376,31 +376,44 @@
   </div>
 </div>
 
-<!-- Modal para opciones de envío en PC o navegadores sin menú nativo -->
+<!-- Modal dinámico para opciones de envío (adaptado a Celular y PC) -->
 <div class="modal-overlay" id="modal-share">
   <div class="modal" style="max-width: 440px;">
     <h3>Enviar copia a otro dispositivo</h3>
-    <p style="font-size: 0.88rem; color: #4A5A4E; margin: 0.6rem 0 1rem;">
+    <p id="share-instruccion" style="font-size: 0.88rem; color: #4A5A4E; margin: 0.6rem 0 1rem; line-height: 1.4;">
       Elige cómo deseas transferir tu base de datos a tu otro dispositivo:
     </p>
 
     <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+      <!-- Opción exclusiva para celular: reintentar menú nativo -->
+      <button type="button" class="btn gold" id="share-opt-native" style="display:none; text-align: left;">
+        📲 Abrir menú del teléfono (Bluetooth, apps, etc.)
+      </button>
+
+      <!-- Opción exclusiva para celular: Bluetooth directo -->
+      <button type="button" class="btn" id="share-opt-bt" style="display:none; text-align: left; background:#1F4E79; color:#fff;">
+        🔵 Enviar por Bluetooth / Quick Share
+      </button>
+
+      <!-- WhatsApp: Abre la app en celular o Web en PC -->
       <button type="button" class="btn" id="share-opt-wa" style="text-align: left;">
-        💬 Enviar por WhatsApp Web
+        💬 Enviar por WhatsApp
       </button>
+
+      <!-- Telegram: Abre la app en celular o Web en PC -->
       <button type="button" class="btn" id="share-opt-tg" style="text-align: left;">
-        ✈️ Enviar por Telegram Web
+        ✈️ Enviar por Telegram
       </button>
+
+      <!-- Correo: abre la app de correo por mailto -->
       <a href="mailto:?subject=Copia%20de%20respaldo%20Libro&body=Adjunto%20el%20archivo%20de%20respaldo%20de%20mi%20negocio." class="btn ghost" style="text-align: left; text-decoration: none;">
         ✉️ Enviar por Correo electrónico
       </a>
+
+      <!-- Descarga estándar -->
       <button type="button" class="btn ghost" id="share-opt-descargar" style="text-align: left;">
         💾 Solo descargar archivo (.sqlite)
       </button>
-    </div>
-
-    <div style="margin-top: 1.2rem; font-size: 0.82rem; background: rgba(31,43,34,0.05); padding: 0.7rem; border-radius: 4px; line-height: 1.4;">
-      💡 <strong>Pasos:</strong> Al hacer clic en WhatsApp o Telegram se descargará el archivo y se abrirá la aplicación web para que lo arrastres a tu chat. En el otro dispositivo, solo abre Libro y toca <em>'Abrir copia'</em>.
     </div>
 
     <div class="modal-actions" style="margin-top: 1.2rem;">
@@ -412,7 +425,6 @@
 <div class="filebar">
   <button class="btn" id="btn-export">Guardar copia (.sqlite)</button>
   <label class="btn ghost" style="cursor:pointer;">Abrir copia
-    <!-- Acepta .sqlite, .db y .txt (por si se envió a través de WhatsApp) -->
     <input type="file" id="file-import" accept=".sqlite,.db,.txt" style="display:none;">
   </label>
   <button class="btn ghost" id="btn-export-csv-all">Exportar todo a CSV</button>

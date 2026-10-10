@@ -7,6 +7,12 @@ const HANDLE_KEY = "libro_file_handle";
 const canUseRealFile = 'showSaveFilePicker' in window;
 let fsHandle = null;
 
+// Detecta si el usuario está en un celular o tablet
+function esDispositivoMovil(){
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || 
+         (navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
+}
+
 async function loadHandle(){
   if (!canUseRealFile) return;
   try{
@@ -97,14 +103,73 @@ function exportarTodoCsv(){
   setStatus("reporte completo exportado a CSV exitosamente");
 }
 
-function abrirModalOpcionesPC(){
+// Abre el modal adaptando los textos según sea Celular o PC
+function abrirModalOpciones(){
   const modal = document.getElementById("modal-share");
-  if (modal) modal.classList.add("open");
+  if (!modal) return;
+
+  const esMovil = esDispositivoMovil();
+  const btnWa = document.getElementById("share-opt-wa");
+  const btnTg = document.getElementById("share-opt-tg");
+  const btnBt = document.getElementById("share-opt-bt");
+  const btnNative = document.getElementById("share-opt-native");
+  const instruccion = document.getElementById("share-instruccion");
+
+  if (esMovil) {
+    if (btnNative) btnNative.style.display = "block";
+    if (btnBt) btnBt.style.display = "block";
+    if (btnWa) btnWa.textContent = "💬 Abrir app de WhatsApp";
+    if (btnTg) btnTg.textContent = "✈️ Abrir app de Telegram";
+    if (instruccion) {
+      instruccion.innerHTML = "💡 <strong>En tu celular:</strong> Puedes usar el menú del sistema (para Bluetooth o Quick Share) o abrir directamente tus aplicaciones instaladas.";
+    }
+  } else {
+    if (btnNative) btnNative.style.display = "none";
+    if (btnBt) btnBt.style.display = "none";
+    if (btnWa) btnWa.textContent = "💬 Enviar por WhatsApp Web";
+    if (btnTg) btnTg.textContent = "✈️ Enviar por Telegram Web";
+    if (instruccion) {
+      instruccion.innerHTML = "💡 <strong>En PC:</strong> Se descargará el archivo y se abrirá WhatsApp Web o Telegram Web en tu navegador para que lo arrastres a tu chat.";
+    }
+  }
+
+  modal.classList.add("open");
 }
 
-function cerrarModalOpcionesPC(){
+function cerrarModalOpciones(){
   const modal = document.getElementById("modal-share");
   if (modal) modal.classList.remove("open");
+}
+
+// Intenta abrir el menú nativo del celular (Android / iOS)
+async function intentarCompartirNativo(){
+  if (!navigator.share) return false;
+
+  const bytes = exportBytes();
+
+  // Intento 1: Como archivo original .sqlite
+  try {
+    const fileSqlite = new File([bytes], "libro-negocio.sqlite", { type: "application/x-sqlite3" });
+    if (!navigator.canShare || navigator.canShare({ files: [fileSqlite] })) {
+      await navigator.share({ files: [fileSqlite], title: "Libro de mi negocio" });
+      setStatus("compartido desde el menú del celular");
+      return true;
+    }
+  } catch(e) {
+    if (e.name === 'AbortError') return true; // Usuario canceló el menú
+  }
+
+  // Intento 2: Como .txt puro (saltea la restricción de extensiones en Chrome Android)
+  try {
+    const fileTxt = new File([bytes], "libro-negocio.txt", { type: "text/plain" });
+    await navigator.share({ files: [fileTxt], title: "Libro de mi negocio" });
+    setStatus("compartido desde el menú del celular");
+    return true;
+  } catch(e) {
+    if (e.name === 'AbortError') return true;
+  }
+
+  return false;
 }
 
 export function initArchivo(){
@@ -127,74 +192,83 @@ export function initArchivo(){
 
   // Botón: Enviar a otro dispositivo
   document.getElementById("btn-share").addEventListener("click", async ()=>{
-    let file = currentFile();
-    let canShare = false;
-    let fileParaCompartir = file;
-
-    // 1. Verificación para compartir nativamente (Celulares Android / iPhone)
-    if (navigator.canShare) {
-      if (navigator.canShare({ files: [file] })) {
-        canShare = true;
-        fileParaCompartir = file;
-      } else {
-        // En Android Chrome, .sqlite se bloquea por seguridad.
-        // Lo preparamos como .txt para que el sistema abra el menú de compartir nativo:
-        const fileTxt = new File([exportBytes()], "libro-negocio.sqlite.txt", { type: "text/plain" });
-        if (navigator.canShare({ files: [fileTxt] })) {
-          canShare = true;
-          fileParaCompartir = fileTxt;
-        }
-      }
+    // 1. Si es celular, intentamos primero abrir el menú nativo (Bluetooth, WhatsApp App, Gmail, etc.)
+    if (esDispositivoMovil()) {
+      const compartido = await intentarCompartirNativo();
+      if (compartido) return;
     }
 
-    if (canShare) {
-      try {
-        await navigator.share({
-          files: [fileParaCompartir],
-          title: "Libro de mi negocio"
-        });
-        setStatus("compartido — archivo enviado desde el menú del sistema");
-        return;
-      } catch (err) {
-        if (err.name === 'AbortError') {
-          setStatus("envío cancelado");
-          return;
-        }
-      }
-    }
-
-    // 2. Si no es compatible (PC / navegadores de escritorio):
-    // Abre el modal interactivo con opciones en vez de descargar directamente
-    abrirModalOpcionesPC();
+    // 2. Si no es celular o el navegador móvil no permitió el menú nativo, abre el modal
+    abrirModalOpciones();
   });
 
-  // Escuchadores del modal de opciones de PC
+  // Escuchadores del modal de opciones
   const modalClose = document.getElementById("modal-share-close");
-  if (modalClose) modalClose.addEventListener("click", cerrarModalOpcionesPC);
+  if (modalClose) modalClose.addEventListener("click", cerrarModalOpciones);
 
+  // Botón del modal: reintentar menú nativo
+  const btnNative = document.getElementById("share-opt-native");
+  if (btnNative) {
+    btnNative.addEventListener("click", async () => {
+      cerrarModalOpciones();
+      await intentarCompartirNativo();
+    });
+  }
+
+  // Botón WhatsApp: App en móvil, Web en PC
+  const btnWaModal = document.getElementById("share-opt-wa");
+  if (btnWaModal) {
+    btnWaModal.addEventListener("click", () => {
+      descargarCopiaDirecta();
+      if (esDispositivoMovil()) {
+        // Abre la app instalada de WhatsApp
+        window.location.href = "whatsapp://send?text=" + encodeURIComponent("Copia de respaldo de Libro");
+      } else {
+        // Abre WhatsApp Web en PC
+        window.open("https://web.whatsapp.com", "_blank");
+      }
+      setStatus("descargado — listo para enviar por WhatsApp");
+    });
+  }
+
+  // Botón Telegram: App en móvil, Web en PC
+  const btnTgModal = document.getElementById("share-opt-tg");
+  if (btnTgModal) {
+    btnTgModal.addEventListener("click", () => {
+      descargarCopiaDirecta();
+      if (esDispositivoMovil()) {
+        // Abre la app instalada de Telegram
+        window.location.href = "tg://msg?text=" + encodeURIComponent("Copia de respaldo de Libro");
+      } else {
+        // Abre Telegram Web en PC
+        window.open("https://web.telegram.org", "_blank");
+      }
+      setStatus("descargado — listo para enviar por Telegram");
+    });
+  }
+
+  // Botón Bluetooth (exclusivo para celular)
+  const btnBtModal = document.getElementById("share-opt-bt");
+  if (btnBtModal) {
+    btnBtModal.addEventListener("click", () => {
+      descargarCopiaDirecta();
+      alert(
+        "🔵 Para enviar por Bluetooth:\n\n" +
+        "1. Ya se descargó 'libro-negocio.sqlite' en tu celular.\n" +
+        "2. Baja la barra de notificaciones y toca la descarga completada (o entra a tu carpeta Descargas).\n" +
+        "3. Toca 'Compartir' y elige 'Bluetooth' o 'Quick Share'.\n" +
+        "4. En el otro dispositivo, abre Libro y presiona 'Abrir copia'."
+      );
+      setStatus("archivo listo en Descargas para enviar por Bluetooth");
+    });
+  }
+
+  // Botón: Solo descargar copia
   const btnDescargarModal = document.getElementById("share-opt-descargar");
   if (btnDescargarModal) {
     btnDescargarModal.addEventListener("click", () => {
       descargarCopiaDirecta();
       setStatus("copia descargada");
-    });
-  }
-
-  const btnWaModal = document.getElementById("share-opt-wa");
-  if (btnWaModal) {
-    btnWaModal.addEventListener("click", () => {
-      descargarCopiaDirecta();
-      window.open("https://web.whatsapp.com", "_blank");
-      setStatus("descargado — adjunta el archivo en WhatsApp Web");
-    });
-  }
-
-  const btnTgModal = document.getElementById("share-opt-tg");
-  if (btnTgModal) {
-    btnTgModal.addEventListener("click", () => {
-      descargarCopiaDirecta();
-      window.open("https://web.telegram.org", "_blank");
-      setStatus("descargado — adjunta el archivo en Telegram Web");
     });
   }
 }
