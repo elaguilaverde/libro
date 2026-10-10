@@ -14,7 +14,7 @@
      1. AJUSTES GENERALES (comunes a PC y celular)
      ========================================================= */
   main {
-    padding-bottom: 140px; /* Evita que la barra inferior tape contenido */
+    padding-bottom: 140px; /* Evita que la barra inferior tape el contenido al hacer scroll */
   }
 
   .month-strip {
@@ -40,7 +40,7 @@
     padding: 0.4rem 0.6rem;
   }
 
-  /* Barras de herramientas por defecto para otras pestañas */
+  /* Barras de herramientas por defecto para las otras pestañas */
   .tools-bar {
     display: flex;
     flex-wrap: wrap;
@@ -51,7 +51,7 @@
   }
 
   /* =========================================================
-     2. MÓVIL (Por defecto: celulares y pantallas hasta 768px)
+     2. MÓVIL (Por defecto: celulares y pantallas de hasta 768px)
      ========================================================= */
   
   /* Bloques de resumen: exactamente 2 columnas x 2 filas */
@@ -63,7 +63,7 @@
   }
   .cards-row .metric {
     width: 100% !important;
-    min-width: 0 !important; /* Previene que desborden en pantallas chicas */
+    min-width: 0 !important; /* Previene desbordes en pantallas chicas */
     box-sizing: border-box;
   }
 
@@ -128,7 +128,7 @@
       padding-bottom: 80px;
     }
 
-    /* Bloques de resumen: las 4 tarjetas en una sola fila */
+    /* Bloques de resumen: las 4 tarjetas en una sola fila horizontal */
     .cards-row {
       grid-template-columns: repeat(4, 1fr) !important;
       gap: 1rem !important;
@@ -364,6 +364,7 @@
   </section>
 </main>
 
+<!-- Modal de edición genérico -->
 <div class="modal-overlay" id="modal-edit">
   <div class="modal">
     <h3 id="modal-title">Editar</h3>
@@ -375,10 +376,44 @@
   </div>
 </div>
 
+<!-- Modal para opciones de envío en PC o navegadores sin menú nativo -->
+<div class="modal-overlay" id="modal-share">
+  <div class="modal" style="max-width: 440px;">
+    <h3>Enviar copia a otro dispositivo</h3>
+    <p style="font-size: 0.88rem; color: #4A5A4E; margin: 0.6rem 0 1rem;">
+      Elige cómo deseas transferir tu base de datos a tu otro dispositivo:
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+      <button type="button" class="btn" id="share-opt-wa" style="text-align: left;">
+        💬 Enviar por WhatsApp Web
+      </button>
+      <button type="button" class="btn" id="share-opt-tg" style="text-align: left;">
+        ✈️ Enviar por Telegram Web
+      </button>
+      <a href="mailto:?subject=Copia%20de%20respaldo%20Libro&body=Adjunto%20el%20archivo%20de%20respaldo%20de%20mi%20negocio." class="btn ghost" style="text-align: left; text-decoration: none;">
+        ✉️ Enviar por Correo electrónico
+      </a>
+      <button type="button" class="btn ghost" id="share-opt-descargar" style="text-align: left;">
+        💾 Solo descargar archivo (.sqlite)
+      </button>
+    </div>
+
+    <div style="margin-top: 1.2rem; font-size: 0.82rem; background: rgba(31,43,34,0.05); padding: 0.7rem; border-radius: 4px; line-height: 1.4;">
+      💡 <strong>Pasos:</strong> Al hacer clic en WhatsApp o Telegram se descargará el archivo y se abrirá la aplicación web para que lo arrastres a tu chat. En el otro dispositivo, solo abre Libro y toca <em>'Abrir copia'</em>.
+    </div>
+
+    <div class="modal-actions" style="margin-top: 1.2rem;">
+      <button class="btn ghost" id="modal-share-close" type="button">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="filebar">
   <button class="btn" id="btn-export">Guardar copia (.sqlite)</button>
   <label class="btn ghost" style="cursor:pointer;">Abrir copia
-    <input type="file" id="file-import" accept=".sqlite,.db" style="display:none;">
+    <!-- Acepta .sqlite, .db y .txt (por si se envió a través de WhatsApp) -->
+    <input type="file" id="file-import" accept=".sqlite,.db,.txt" style="display:none;">
   </label>
   <button class="btn ghost" id="btn-export-csv-all">Exportar todo a CSV</button>
   <button class="btn gold" id="btn-share">Enviar a otro dispositivo</button>

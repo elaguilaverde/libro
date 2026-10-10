@@ -97,6 +97,16 @@ function exportarTodoCsv(){
   setStatus("reporte completo exportado a CSV exitosamente");
 }
 
+function abrirModalOpcionesPC(){
+  const modal = document.getElementById("modal-share");
+  if (modal) modal.classList.add("open");
+}
+
+function cerrarModalOpcionesPC(){
+  const modal = document.getElementById("modal-share");
+  if (modal) modal.classList.remove("open");
+}
+
 export function initArchivo(){
   loadHandle();
 
@@ -115,16 +125,33 @@ export function initArchivo(){
     setStatus(`archivo "${file.name}" importado y renderizado`);
   });
 
+  // Botón: Enviar a otro dispositivo
   document.getElementById("btn-share").addEventListener("click", async ()=>{
-    const file = currentFile();
+    let file = currentFile();
+    let canShare = false;
+    let fileParaCompartir = file;
 
-    // 1. Si el navegador soporta compartir el archivo nativamente (ej: móviles)
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    // 1. Verificación para compartir nativamente (Celulares Android / iPhone)
+    if (navigator.canShare) {
+      if (navigator.canShare({ files: [file] })) {
+        canShare = true;
+        fileParaCompartir = file;
+      } else {
+        // En Android Chrome, .sqlite se bloquea por seguridad.
+        // Lo preparamos como .txt para que el sistema abra el menú de compartir nativo:
+        const fileTxt = new File([exportBytes()], "libro-negocio.sqlite.txt", { type: "text/plain" });
+        if (navigator.canShare({ files: [fileTxt] })) {
+          canShare = true;
+          fileParaCompartir = fileTxt;
+        }
+      }
+    }
+
+    if (canShare) {
       try {
         await navigator.share({
-          files: [file],
-          title: "Libro de mi negocio",
-          text: "Copia de respaldo de Libro"
+          files: [fileParaCompartir],
+          title: "Libro de mi negocio"
         });
         setStatus("compartido — archivo enviado desde el menú del sistema");
         return;
@@ -136,18 +163,38 @@ export function initArchivo(){
       }
     }
 
-    // 2. Si no es compatible (navegador en PC / Linux / Windows):
-    descargarCopiaDirecta();
-    setStatus("copia 'libro-negocio.sqlite' lista en tus Descargas para transferir");
-
-    alert(
-      "📦 Copia lista para transferir\n\n" +
-      "Se ha descargado el archivo 'libro-negocio.sqlite' a tu carpeta de Descargas.\n\n" +
-      "Para pasarlo a tu otro dispositivo:\n" +
-      "1. Envíate el archivo por WhatsApp Web, Telegram, correo o Drive.\n" +
-      "2. En el otro dispositivo, abre Libro.\n" +
-      "3. Toca 'Abrir copia' y selecciona 'libro-negocio.sqlite'.\n\n" +
-      "¡Se sincronizará todo tu negocio con tus fotos y movimientos!"
-    );
+    // 2. Si no es compatible (PC / navegadores de escritorio):
+    // Abre el modal interactivo con opciones en vez de descargar directamente
+    abrirModalOpcionesPC();
   });
+
+  // Escuchadores del modal de opciones de PC
+  const modalClose = document.getElementById("modal-share-close");
+  if (modalClose) modalClose.addEventListener("click", cerrarModalOpcionesPC);
+
+  const btnDescargarModal = document.getElementById("share-opt-descargar");
+  if (btnDescargarModal) {
+    btnDescargarModal.addEventListener("click", () => {
+      descargarCopiaDirecta();
+      setStatus("copia descargada");
+    });
+  }
+
+  const btnWaModal = document.getElementById("share-opt-wa");
+  if (btnWaModal) {
+    btnWaModal.addEventListener("click", () => {
+      descargarCopiaDirecta();
+      window.open("https://web.whatsapp.com", "_blank");
+      setStatus("descargado — adjunta el archivo en WhatsApp Web");
+    });
+  }
+
+  const btnTgModal = document.getElementById("share-opt-tg");
+  if (btnTgModal) {
+    btnTgModal.addEventListener("click", () => {
+      descargarCopiaDirecta();
+      window.open("https://web.telegram.org", "_blank");
+      setStatus("descargado — adjunta el archivo en Telegram Web");
+    });
+  }
 }
