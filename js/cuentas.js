@@ -1,7 +1,7 @@
-// cuentas.js — dueño de la tabla `cuentas` (deudas por cobrar/pagar).
+// cuentas.js — dueño de la tabla `cuentas` (deudas por cobrar/pagar)
 
-import { query, exec } from './db.js';
-import { money, buildFieldsHtml, showEditModal } from './ui.js';
+import { query, exec, getConfig } from './db.js';
+import { money, buildFieldsHtml, showEditModal, getMonedasOptionsHtml } from './ui.js';
 
 let searchQuery = "";
 
@@ -9,16 +9,19 @@ const EDIT_FIELDS = [
   { name:'contacto', label:'Contacto', type:'text' },
   { name:'tipo', label:'Tipo', type:'select', options:[['por_cobrar','Me deben'],['por_pagar','Debo']] },
   { name:'monto', label:'Monto', type:'number', step:'0.01' },
+  { name:'moneda', label:'Moneda', type:'html', html: val => `<select name="moneda">${getMonedasOptionsHtml(val)}</select>` },
   { name:'vencimiento', label:'Vence', type:'date' },
   { name:'estado', label:'Estado', type:'select', options:[['pendiente','Pendiente'],['pagado','Pagado']] }
 ];
 
 function render(){
+  const mainCur = getConfig('moneda_principal') || 'USD';
   const allRows = query("SELECT * FROM cuentas ORDER BY id DESC");
   const q = searchQuery.toLowerCase();
   const rows = q ? allRows.filter(r =>
     (r.contacto && r.contacto.toLowerCase().includes(q)) ||
     (r.estado && r.estado.toLowerCase().includes(q)) ||
+    (r.moneda && r.moneda.toLowerCase().includes(q)) ||
     (r.tipo && (r.tipo === 'por_cobrar' ? 'me deben' : 'debo').includes(q))
   ) : allRows;
 
@@ -27,7 +30,7 @@ function render(){
     <tr>
       <td>${r.contacto}</td>
       <td>${r.tipo === 'por_cobrar' ? 'me deben' : 'debo'}</td>
-      <td>${money(r.monto)}</td>
+      <td>${money(r.monto, r.moneda || mainCur)}</td>
       <td>${r.vencimiento || "—"}</td>
       <td>${r.estado}</td>
       <td>
@@ -43,8 +46,9 @@ function openEdit(id){
   const row = query("SELECT * FROM cuentas WHERE id=?", [id])[0];
   if (!row) return;
   showEditModal("Editar cuenta", buildFieldsHtml(EDIT_FIELDS, row), values => {
-    exec("UPDATE cuentas SET contacto=?, tipo=?, monto=?, vencimiento=?, estado=? WHERE id=?",
-      [values.contacto, values.tipo, parseFloat(values.monto), values.vencimiento, values.estado, id]);
+    const moneda = values.moneda || getConfig('moneda_principal') || 'USD';
+    exec("UPDATE cuentas SET contacto=?, tipo=?, monto=?, vencimiento=?, estado=?, moneda=? WHERE id=?",
+      [values.contacto, values.tipo, parseFloat(values.monto), values.vencimiento, values.estado, moneda, id]);
   });
 }
 
@@ -54,12 +58,12 @@ export function initCuentas(){
   document.getElementById("form-cta").addEventListener("submit", e => {
     e.preventDefault();
     const f = new FormData(e.target);
-    exec("INSERT INTO cuentas(contacto, tipo, monto, vencimiento) VALUES (?,?,?,?)",
-      [f.get("contacto"), f.get("tipo"), parseFloat(f.get("monto")), f.get("vencimiento")]);
+    const moneda = f.get("moneda") || getConfig('moneda_principal') || 'USD';
+    exec("INSERT INTO cuentas(contacto, tipo, monto, vencimiento, moneda) VALUES (?,?,?,?,?)",
+      [f.get("contacto"), f.get("tipo"), parseFloat(f.get("monto")), f.get("vencimiento"), moneda]);
     e.target.reset();
   });
 
-  // Búsqueda en vivo de cuentas
   const busq = document.getElementById("busq-cta");
   if (busq) {
     busq.addEventListener("input", e => {

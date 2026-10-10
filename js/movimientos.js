@@ -1,8 +1,7 @@
-// movimientos.js — dueño de la tabla `transacciones`.
-// Depende de inventario.js para el selector de producto y para ajustar stock.
+// movimientos.js — dueño de la tabla `transacciones`
 
-import { query, rawRun, commit } from './db.js';
-import { money, buildFieldsHtml, showEditModal, toLocalIsoDate, downloadCsv } from './ui.js';
+import { query, rawRun, commit, getConfig } from './db.js';
+import { money, buildFieldsHtml, showEditModal, toLocalIsoDate, downloadCsv, getMonedasOptionsHtml } from './ui.js';
 import { getProductoOptionsHtml, getPrecio, ajustarStockRaw } from './inventario.js';
 
 let searchQuery = "";
@@ -21,7 +20,8 @@ const EDIT_FIELDS = [
   ]},
   { name:'categoria', label:'Categoría', type:'text' },
   { name:'nota', label:'Descripción', type:'text' },
-  { name:'monto', label:'Monto', type:'number', step:'0.01' }
+  { name:'monto', label:'Monto', type:'number', step:'0.01' },
+  { name:'moneda', label:'Moneda', type:'html', html: val => `<select name="moneda">${getMonedasOptionsHtml(val)}</select>` }
 ];
 
 function formatPago(p){
@@ -35,7 +35,6 @@ function formatPago(p){
   return map[p] || (p ? p : 'Efectivo');
 }
 
-// Actualiza las opciones sugeridas en el <datalist> con las categorías usadas
 function updateCategoriasDatalist(){
   const dl = document.getElementById("lista-categorias");
   if (!dl) return;
@@ -45,6 +44,7 @@ function updateCategoriasDatalist(){
 
 function render(){
   updateCategoriasDatalist();
+  const mainCur = getConfig('moneda_principal') || 'USD';
 
   const allRows = query(`
     SELECT t.*, p.nombre AS producto_nombre
@@ -59,6 +59,7 @@ function render(){
     (r.nota && r.nota.toLowerCase().includes(q)) ||
     (r.producto_nombre && r.producto_nombre.toLowerCase().includes(q)) ||
     (r.tipo && r.tipo.toLowerCase().includes(q)) ||
+    (r.moneda && r.moneda.toLowerCase().includes(q)) ||
     (r.forma_pago && r.forma_pago.toLowerCase().includes(q))
   ) : allRows;
 
@@ -72,7 +73,7 @@ function render(){
       <td>${formatPago(r.forma_pago)}</td>
       <td>${r.nota || ""}</td>
       <td class="amt ${r.tipo === 'venta' ? 'pos' : 'neg'}">
-        ${r.tipo === 'venta' ? '+' : '-'}${money(r.monto)}
+        ${r.tipo === 'venta' ? '+' : '-'}${money(r.monto, r.moneda || mainCur)}
       </td>
       <td>
         <button class="del" data-edit-mov="${r.id}">editar</button>
@@ -87,7 +88,6 @@ function openEdit(id){
   if (!row) return;
 
   showEditModal("Editar movimiento", buildFieldsHtml(EDIT_FIELDS, row), async values => {
-    // Revierte efecto de stock anterior
     if (row.tipo === 'venta' && row.producto_id) {
       ajustarStockRaw(row.producto_id, row.cantidad || 1);
     }
@@ -95,13 +95,13 @@ function openEdit(id){
     const nuevoProductoId = values.producto_id || null;
     const nuevaCantidad = parseFloat(values.cantidad) || null;
     const nuevaFormaPago = values.forma_pago || 'efectivo';
+    const nuevaMoneda = values.moneda || getConfig('moneda_principal') || 'USD';
 
     rawRun(
-      "UPDATE transacciones SET fecha=?, tipo=?, categoria=?, nota=?, monto=?, producto_id=?, cantidad=?, forma_pago=? WHERE id=?",
-      [values.fecha, values.tipo, values.categoria, values.nota, parseFloat(values.monto), nuevoProductoId, nuevaCantidad, nuevaFormaPago, id]
+      "UPDATE transacciones SET fecha=?, tipo=?, categoria=?, nota=?, monto=?, producto_id=?, cantidad=?, forma_pago=?, moneda=? WHERE id=?",
+      [values.fecha, values.tipo, values.categoria, values.nota, parseFloat(values.monto), nuevoProductoId, nuevaCantidad, nuevaFormaPago, nuevaMoneda, id]
     );
 
-    // Aplica nuevo efecto de stock
     if (values.tipo === 'venta' && nuevoProductoId) {
       ajustarStockRaw(nuevoProductoId, -(nuevaCantidad || 1));
     }
@@ -113,13 +113,13 @@ function openEdit(id){
 function exportarMovimientosCsv(){
   const rows = query(`
     SELECT t.fecha, t.tipo, t.categoria, COALESCE(p.nombre, '') AS producto,
-           COALESCE(t.cantidad, '') AS cantidad, t.forma_pago, COALESCE(t.nota, '') AS nota, t.monto
+           COALESCE(t.cantidad, '') AS cantidad, t.forma_pago, COALESCE(t.nota, '') AS nota, t.monto, t.moneda
     FROM transacciones t
     LEFT JOIN productos p ON p.id = t.producto_id
     ORDER BY t.fecha DESC, t.id DESC
   `);
 
-  const headers = ["Fecha", "Tipo", "Categoría", "Producto", "Cantidad", "Forma de pago", "Descripción", "Monto"];
+  const headers = ["Fecha", "Tipo", "Categoría", "Producto", "Cantidad", "Forma de pago", "Descripción", "Monto", "Moneda"];
   const data = rows.map(r => [
     r.fecha,
     r.tipo,
@@ -128,7 +128,8 @@ function exportarMovimientosCsv(){
     r.cantidad,
     formatPago(r.forma_pago),
     r.nota,
-    r.monto
+    r.monto,
+    r.moneda || ''
   ]);
 
   downloadCsv(`movimientos_${toLocalIsoDate()}.csv`, headers, data);
@@ -141,18 +142,21 @@ export function initMovimientos(){
   const fechaInput = form.querySelector('[name=fecha]');
   if (fechaInput) fechaInput.value = toLocalIsoDate();
 
-  // Autocompleta el monto sugerido al elegir producto/cantidad
   form.addEventListener("change", e => {
     if (e.target.name !== 'producto_id' && e.target.name !== 'cantidad') return;
     const pid = form.producto_id.value;
     const cant = parseFloat(form.cantidad.value) || 1;
     if (pid) {
-      const precio = getPrecio(pid);
-      if (precio != null) form.monto.value = (precio * cant).toFixed(2);
+      const prod = query("SELECT precio, moneda FROM productos WHERE id=?", [pid])[0];
+      if (prod && prod.precio != null) {
+        form.monto.value = (prod.precio * cant).toFixed(2);
+        if (prod.moneda && form.moneda) {
+          form.moneda.value = prod.moneda;
+        }
+      }
     }
   });
 
-  // Guardar nuevo movimiento
   form.addEventListener("submit", async e => {
     e.preventDefault();
     const f = new FormData(e.target);
@@ -160,10 +164,11 @@ export function initMovimientos(){
     const productoId = f.get("producto_id") || null;
     const cantidad = parseFloat(f.get("cantidad")) || null;
     const formaPago = f.get("forma_pago") || 'efectivo';
+    const moneda = f.get("moneda") || getConfig('moneda_principal') || 'USD';
 
     rawRun(
-      "INSERT INTO transacciones(fecha, tipo, categoria, nota, monto, producto_id, cantidad, forma_pago) VALUES (?,?,?,?,?,?,?,?)",
-      [f.get("fecha") || toLocalIsoDate(), tipo, f.get("categoria"), f.get("nota"), parseFloat(f.get("monto")), productoId, cantidad, formaPago]
+      "INSERT INTO transacciones(fecha, tipo, categoria, nota, monto, producto_id, cantidad, forma_pago, moneda) VALUES (?,?,?,?,?,?,?,?,?)",
+      [f.get("fecha") || toLocalIsoDate(), tipo, f.get("categoria"), f.get("nota"), parseFloat(f.get("monto")), productoId, cantidad, formaPago, moneda]
     );
 
     if (tipo === 'venta' && productoId) {
@@ -178,7 +183,6 @@ export function initMovimientos(){
     form.querySelector('[name=forma_pago]').value = 'efectivo';
   });
 
-  // Búsqueda en vivo
   const inputBusq = document.getElementById("busq-mov");
   if (inputBusq) {
     inputBusq.addEventListener("input", e => {
@@ -187,13 +191,8 @@ export function initMovimientos(){
     });
   }
 
-  // Exportar movimientos a CSV
-  const btnCsv = document.getElementById("btn-export-csv-mov");
-  if (btnCsv) {
-    btnCsv.addEventListener("click", exportarMovimientosCsv);
-  }
+  document.getElementById("btn-export-csv-mov")?.addEventListener("click", exportarMovimientosCsv);
 
-  // Clics para editar / eliminar
   document.body.addEventListener("click", async e => {
     if (e.target.dataset.editMov) openEdit(e.target.dataset.editMov);
     if (e.target.dataset.delMov) {

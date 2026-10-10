@@ -1,11 +1,10 @@
-// catalogo.js — gestión de catálogo de productos independiente del stock y exportación a PDF.
+// catalogo.js — catálogo de productos y exportación a PDF multimoneda
 
-import { query, exec } from './db.js';
-import { money, buildFieldsHtml, showEditModal, toLocalIsoDate } from './ui.js';
+import { query, exec, getConfig } from './db.js';
+import { money, buildFieldsHtml, showEditModal, toLocalIsoDate, getMonedasOptionsHtml } from './ui.js';
 
 let searchQuery = "";
 
-// Comprime una imagen a máx 450px en JPEG 70% (~20-35 KB)
 function comprimirImagen(file, maxDim = 450, quality = 0.7){
   return new Promise((resolve, reject) => {
     if (!file || !file.type.startsWith('image/')) {
@@ -30,7 +29,6 @@ function comprimirImagen(file, maxDim = 450, quality = 0.7){
         canvas.width = w;
         canvas.height = h;
         const ctx = canvas.getContext('2d');
-        // Fondo blanco para evitar fondos negros en PNG transparentes
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, w, h);
         ctx.drawImage(img, 0, 0, w, h);
@@ -47,6 +45,7 @@ function comprimirImagen(file, maxDim = 450, quality = 0.7){
 const EDIT_FIELDS = [
   { name: 'nombre', label: 'Producto', type: 'text' },
   { name: 'precio', label: 'Precio', type: 'number', step: '0.01' },
+  { name: 'moneda', label: 'Moneda', type: 'html', html: val => `<select name="moneda">${getMonedasOptionsHtml(val)}</select>` },
   { name: 'descripcion', label: 'Descripción (opcional)', type: 'text' },
   {
     name: 'foto',
@@ -64,6 +63,7 @@ const EDIT_FIELDS = [
 ];
 
 function render(){
+  const mainCur = getConfig('moneda_principal') || 'USD';
   const allRows = query("SELECT * FROM catalogo ORDER BY id DESC");
   const q = searchQuery.toLowerCase();
   const rows = q ? allRows.filter(r =>
@@ -79,7 +79,7 @@ function render(){
       ${r.foto ? `<img src="${r.foto}" alt="${r.nombre}" class="cat-card-img" loading="lazy">` : `<div class="cat-card-placeholder">Sin foto</div>`}
       <div class="cat-card-body">
         <div class="cat-card-title">${r.nombre}</div>
-        <div class="cat-card-price">${money(r.precio)}</div>
+        <div class="cat-card-price">${money(r.precio, r.moneda || mainCur)}</div>
         ${r.descripcion ? `<div class="cat-card-desc">${r.descripcion}</div>` : ''}
         <div class="cat-card-actions">
           <button class="del" data-edit-cat="${r.id}">editar</button>
@@ -95,11 +95,11 @@ function openEdit(id){
   if (!row) return;
 
   showEditModal("Editar producto del catálogo", buildFieldsHtml(EDIT_FIELDS, row), values => {
-    exec("UPDATE catalogo SET nombre=?, precio=?, descripcion=?, foto=? WHERE id=?",
-      [values.nombre, parseFloat(values.precio), values.descripcion || '', values.foto || null, id]);
+    const moneda = values.moneda || getConfig('moneda_principal') || 'USD';
+    exec("UPDATE catalogo SET nombre=?, precio=?, descripcion=?, foto=?, moneda=? WHERE id=?",
+      [values.nombre, parseFloat(values.precio), values.descripcion || '', values.foto || null, moneda, id]);
   });
 
-  // Escuchadores dinámicos dentro del modal para cambiar o quitar foto
   const fileInput = document.getElementById("modal-cat-file");
   const hiddenInput = document.getElementById("modal-cat-hidden");
   const imgPreview = document.getElementById("modal-cat-preview");
@@ -137,10 +137,11 @@ function openEdit(id){
 function generarPdfCatalogo(){
   const jsPDF = window.jspdf?.jsPDF || window.jsPDF;
   if (!jsPDF) {
-    alert("No se encontró la librería jsPDF. Asegúrate de tener ./vendor/jspdf.umd.min.js.");
+    alert("No se encontró la librería jsPDF.");
     return;
   }
 
+  const mainCur = getConfig('moneda_principal') || 'USD';
   const rows = query("SELECT * FROM catalogo ORDER BY nombre ASC");
   if (!rows.length) {
     alert("El catálogo no tiene productos para exportar.");
@@ -153,19 +154,17 @@ function generarPdfCatalogo(){
   const margin = 15;
   const contentWidth = pageWidth - (margin * 2);
 
-  // Encabezado
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  doc.setTextColor(31, 43, 34); // #1F2B22
+  doc.setTextColor(31, 43, 34);
   doc.text("Catálogo de Productos", margin, 20);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.setTextColor(74, 90, 78); // #4A5A4E
+  doc.setTextColor(74, 90, 78);
   doc.text(`Lista de precios oficial · Emitido el ${toLocalIsoDate()}`, margin, 26);
 
-  // Línea divisoria
-  doc.setDrawColor(201, 191, 160); // #C9BFA0
+  doc.setDrawColor(201, 191, 160);
   doc.setLineWidth(0.5);
   doc.line(margin, 30, pageWidth - margin, 30);
 
@@ -173,13 +172,11 @@ function generarPdfCatalogo(){
   const rowHeight = 24;
 
   rows.forEach(prod => {
-    // Salto de página si nos acercamos al final
     if (y + rowHeight > pageHeight - 15) {
       doc.addPage();
       y = 20;
     }
 
-    // Miniatura de foto o recuadro
     const imgSize = 18;
     if (prod.foto) {
       try {
@@ -196,13 +193,11 @@ function generarPdfCatalogo(){
       doc.text("Sin foto", margin + 3.5, y + 10);
     }
 
-    // Nombre del producto
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(31, 43, 34);
     doc.text(prod.nombre, margin + imgSize + 5, y + 6);
 
-    // Descripción
     if (prod.descripcion) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
@@ -211,13 +206,12 @@ function generarPdfCatalogo(){
       doc.text(descLines.slice(0, 2), margin + imgSize + 5, y + 12);
     }
 
-    // Precio
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(47, 107, 79); // #2F6B4F
-    doc.text(money(prod.precio), pageWidth - margin, y + 7, { align: 'right' });
+    doc.setFontSize(11);
+    doc.setTextColor(47, 107, 79);
+    const precioTxt = `$${Number(prod.precio || 0).toFixed(2)} ${prod.moneda || mainCur}`;
+    doc.text(precioTxt, pageWidth - margin, y + 7, { align: 'right' });
 
-    // Separador entre filas
     doc.setDrawColor(230, 225, 215);
     doc.setLineWidth(0.3);
     doc.line(margin, y + imgSize + 3, pageWidth - margin, y + imgSize + 3);
@@ -238,7 +232,6 @@ export function initCatalogo(){
   const previewImg = document.getElementById("cat-foto-preview");
   const btnRemovePhoto = document.getElementById("cat-foto-remove");
 
-  // Procesar y comprimir foto al seleccionarla
   if (fileInput) {
     fileInput.addEventListener("change", async e => {
       const file = e.target.files[0];
@@ -255,7 +248,6 @@ export function initCatalogo(){
     });
   }
 
-  // Quitar foto seleccionada
   if (btnRemovePhoto) {
     btnRemovePhoto.addEventListener("click", () => {
       if (fileInput) fileInput.value = "";
@@ -265,7 +257,6 @@ export function initCatalogo(){
     });
   }
 
-  // Agregar nuevo producto al catálogo
   if (form) {
     form.addEventListener("submit", async e => {
       e.preventDefault();
@@ -274,9 +265,10 @@ export function initCatalogo(){
       const precio = parseFloat(f.get("precio"));
       const descripcion = f.get("descripcion") || '';
       const foto = f.get("foto") || null;
+      const moneda = f.get("moneda") || getConfig('moneda_principal') || 'USD';
 
-      await exec("INSERT INTO catalogo(nombre, precio, descripcion, foto) VALUES (?,?,?,?)",
-        [nombre, precio, descripcion, foto]);
+      await exec("INSERT INTO catalogo(nombre, precio, descripcion, foto, moneda) VALUES (?,?,?,?,?)",
+        [nombre, precio, descripcion, foto, moneda]);
 
       e.target.reset();
       if (fileInput) fileInput.value = "";
@@ -286,7 +278,6 @@ export function initCatalogo(){
     });
   }
 
-  // Búsqueda en vivo
   const busq = document.getElementById("busq-cat");
   if (busq) {
     busq.addEventListener("input", e => {
@@ -295,13 +286,8 @@ export function initCatalogo(){
     });
   }
 
-  // Descargar PDF
-  const btnPdf = document.getElementById("btn-descargar-pdf-cat");
-  if (btnPdf) {
-    btnPdf.addEventListener("click", generarPdfCatalogo);
-  }
+  document.getElementById("btn-descargar-pdf-cat")?.addEventListener("click", generarPdfCatalogo);
 
-  // Acciones de editar y eliminar
   document.body.addEventListener("click", e => {
     if (e.target.dataset.editCat) openEdit(e.target.dataset.editCat);
     if (e.target.dataset.delCat) {

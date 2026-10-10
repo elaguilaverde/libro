@@ -1,8 +1,14 @@
-// ui.js — piezas de interfaz que cualquier módulo puede reutilizar.
-// No sabe nada de ventas, inventario ni cuentas: solo de tabs, formato, modal, fechas y exportación CSV.
+// ui.js — piezas de interfaz compartidas
 
-export function money(n){
-  return "$" + Number(n).toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+import { getConfig } from './db.js';
+
+export const MONEDAS_DISPONIBLES = [
+  'UYU', 'USD', 'EUR', 'ARS', 'BRL', 'CLP', 'COP', 'MXN', 'PEN', 'PYG'
+];
+
+export function money(n, currency = ''){
+  const formatted = "$" + Number(n || 0).toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return currency ? `${formatted} <small style="font-weight:normal; opacity:0.85;">${currency}</small>` : formatted;
 }
 
 export function setStatus(t){
@@ -22,7 +28,6 @@ export function initTabs(){
   });
 }
 
-// Convierte un objeto Date a string "YYYY-MM-DD" en hora local (no UTC)
 export function toLocalIsoDate(d = new Date()){
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -30,7 +35,6 @@ export function toLocalIsoDate(d = new Date()){
   return `${y}-${m}-${day}`;
 }
 
-// Devuelve { desde, hasta } según el período elegido
 export function getDateRangePreset(preset){
   const now = new Date();
   if (preset === 'hoy'){
@@ -38,8 +42,7 @@ export function getDateRangePreset(preset){
     return { desde: hoyStr, hasta: hoyStr };
   }
   if (preset === 'semana'){
-    // Semana de Lunes a Domingo
-    const day = now.getDay(); // 0: Dom, 1: Lun, ..., 6: Sab
+    const day = now.getDay();
     const diffToMon = day === 0 ? -6 : 1 - day;
     const lunes = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon);
     const domingo = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMon + 6);
@@ -50,10 +53,9 @@ export function getDateRangePreset(preset){
     const ultimoDia = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     return { desde: toLocalIsoDate(primerDia), hasta: toLocalIsoDate(ultimoDia) };
   }
-  return { desde: null, hasta: null }; // 'todo'
+  return { desde: null, hasta: null };
 }
 
-// Exporta una matriz de datos a archivo CSV compatible 100% con Excel en español
 export function downloadCsv(filename, headers, rows){
   const formatCell = val => {
     if (val == null) return '""';
@@ -76,7 +78,14 @@ export function downloadCsv(filename, headers, rows){
   URL.revokeObjectURL(url);
 }
 
-// Construye los <div class="field"> de un formulario a partir de una configuración declarativa.
+// Devuelve el HTML de opciones de moneda priorizando la principal
+export function getMonedasOptionsHtml(selected = null){
+  const main = getConfig('moneda_principal') || 'USD';
+  const sel = selected || main;
+  const list = Array.from(new Set([main, ...MONEDAS_DISPONIBLES]));
+  return list.map(m => `<option value="${m}" ${m === sel ? 'selected' : ''}>${m}</option>`).join("");
+}
+
 export function buildFieldsHtml(fields, row){
   return fields.map(fld=>{
     const val = row[fld.name] ?? '';
@@ -106,8 +115,8 @@ function closeModal(){
   onSaveCallback = null;
 }
 
-document.getElementById("modal-cancel").addEventListener("click", closeModal);
-document.getElementById("modal-save").addEventListener("click", ()=>{
+document.getElementById("modal-cancel")?.addEventListener("click", closeModal);
+document.getElementById("modal-save")?.addEventListener("click", ()=>{
   const values = {};
   document.querySelectorAll("#modal-fields [name]").forEach(inp => values[inp.name] = inp.value);
   const cb = onSaveCallback;

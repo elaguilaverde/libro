@@ -1,5 +1,4 @@
 // db.js — todo lo relacionado a almacenar y consultar datos.
-// Ningún otro módulo debería tocar IndexedDB o sql.js directamente: pasan por acá.
 
 export let db = null;
 const DB_KEY = "libro_sqlite_bytes";
@@ -8,7 +7,7 @@ let usingLocalSqlJs = false;
 
 export function isUsingLocalEngine(){ return usingLocalSqlJs; }
 
-// ---------- IndexedDB (clave-valor simple) ----------
+// ---------- IndexedDB ----------
 function idbOpen(){
   return new Promise((resolve, reject)=>{
     const req = indexedDB.open("libro_db", 1);
@@ -36,7 +35,7 @@ export async function idbSet(key, val){
   });
 }
 
-// ---------- Cargar el motor SQL ----------
+// ---------- Cargar motor SQL ----------
 function loadScriptTag(src){
   return new Promise((resolve, reject)=>{
     const s = document.createElement('script');
@@ -57,12 +56,53 @@ async function loadSqlEngine(){
   }
 }
 
-// ---------- Migraciones ----------
+// ---------- Detección de moneda local sin internet ----------
+export function detectClientCurrency(){
+  try {
+    const lang = navigator.language || navigator.languages?.[0] || 'es-UY';
+    const parts = lang.split('-');
+    const country = (parts.length > 1 ? parts[parts.length - 1] : parts[0]).toUpperCase();
+    const map = {
+      UY: 'UYU', AR: 'ARS', US: 'USD', ES: 'EUR', MX: 'MXN',
+      CL: 'CLP', CO: 'COP', BR: 'BRL', PE: 'PEN', PY: 'PYG',
+      BO: 'BOB', EC: 'USD', PA: 'USD', VE: 'VES', GT: 'GTQ',
+      CR: 'CRC', DO: 'DOP', DE: 'EUR', FR: 'EUR', IT: 'EUR',
+      GB: 'GBP', CA: 'CAD'
+    };
+    return map[country] || 'USD';
+  } catch(e) {
+    return 'USD';
+  }
+}
+
+// ---------- Configuración Key-Value en SQLite ----------
+export function getConfig(key){
+  if (!db) return null;
+  const res = query("SELECT valor FROM config WHERE clave = ?", [key]);
+  return res[0]?.valor || null;
+}
+
+export async function setConfig(key, val){
+  if (!db) return;
+  rawRun("INSERT OR REPLACE INTO config(clave, valor) VALUES (?, ?)", [key, val]);
+  await commit();
+}
+
+// ---------- Migraciones de esquema ----------
 function migrate(){
-  const cols = query("PRAGMA table_info(transacciones)").map(c => c.name);
-  if (!cols.includes('producto_id')) db.run("ALTER TABLE transacciones ADD COLUMN producto_id INTEGER");
-  if (!cols.includes('cantidad')) db.run("ALTER TABLE transacciones ADD COLUMN cantidad REAL");
-  if (!cols.includes('forma_pago')) db.run("ALTER TABLE transacciones ADD COLUMN forma_pago TEXT DEFAULT 'efectivo'");
+  db.run(`CREATE TABLE IF NOT EXISTS config (clave TEXT PRIMARY KEY, valor TEXT)`);
+
+  const tCols = query("PRAGMA table_info(transacciones)").map(c => c.name);
+  if (!tCols.includes('producto_id')) db.run("ALTER TABLE transacciones ADD COLUMN producto_id INTEGER");
+  if (!tCols.includes('cantidad')) db.run("ALTER TABLE transacciones ADD COLUMN cantidad REAL");
+  if (!tCols.includes('forma_pago')) db.run("ALTER TABLE transacciones ADD COLUMN forma_pago TEXT DEFAULT 'efectivo'");
+  if (!tCols.includes('moneda')) db.run("ALTER TABLE transacciones ADD COLUMN moneda TEXT");
+
+  const pCols = query("PRAGMA table_info(productos)").map(c => c.name);
+  if (!pCols.includes('moneda')) db.run("ALTER TABLE productos ADD COLUMN moneda TEXT");
+
+  const cCols = query("PRAGMA table_info(cuentas)").map(c => c.name);
+  if (!cCols.includes('moneda')) db.run("ALTER TABLE cuentas ADD COLUMN moneda TEXT");
 
   db.run(`
     CREATE TABLE IF NOT EXISTS catalogo(
@@ -70,9 +110,26 @@ function migrate(){
       nombre TEXT,
       precio REAL,
       descripcion TEXT,
-      foto TEXT
+      foto TEXT,
+      moneda TEXT
     );
   `);
+
+  const catCols = query("PRAGMA table_info(catalogo)").map(c => c.name);
+  if (!catCols.includes('moneda')) db.run("ALTER TABLE catalogo ADD COLUMN moneda TEXT");
+
+  // Si no hay moneda principal guardada, detectamos la local del usuario
+  let mainCur = getConfig('moneda_principal');
+  if (!mainCur) {
+    mainCur = detectClientCurrency();
+    db.run("INSERT OR REPLACE INTO config(clave, valor) VALUES ('moneda_principal', ?)", [mainCur]);
+  }
+
+  // Registros antiguos sin moneda asignada se asocian a la principal
+  db.run("UPDATE transacciones SET moneda = ? WHERE moneda IS NULL OR moneda = ''", [mainCur]);
+  db.run("UPDATE productos SET moneda = ? WHERE moneda IS NULL OR moneda = ''", [mainCur]);
+  db.run("UPDATE cuentas SET moneda = ? WHERE moneda IS NULL OR moneda = ''", [mainCur]);
+  db.run("UPDATE catalogo SET moneda = ? WHERE moneda IS NULL OR moneda = ''", [mainCur]);
 }
 
 export async function initDb(){
@@ -86,6 +143,7 @@ export async function initDb(){
   } else {
     db = new SQL.Database();
     db.run(`
+      CREATE TABLE config(clave TEXT PRIMARY KEY, valor TEXT);
       CREATE TABLE transacciones(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         fecha TEXT,
@@ -95,14 +153,16 @@ export async function initDb(){
         monto REAL,
         producto_id INTEGER,
         cantidad REAL,
-        forma_pago TEXT DEFAULT 'efectivo'
+        forma_pago TEXT DEFAULT 'efectivo',
+        moneda TEXT
       );
       CREATE TABLE productos(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT,
         precio REAL,
         stock INTEGER,
-        stock_minimo INTEGER
+        stock_minimo INTEGER,
+        moneda TEXT
       );
       CREATE TABLE cuentas(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,14 +170,16 @@ export async function initDb(){
         tipo TEXT,
         monto REAL,
         vencimiento TEXT,
-        estado TEXT DEFAULT 'pendiente'
+        estado TEXT DEFAULT 'pendiente',
+        moneda TEXT
       );
       CREATE TABLE catalogo(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT,
         precio REAL,
         descripcion TEXT,
-        foto TEXT
+        foto TEXT,
+        moneda TEXT
       );
     `);
   }
@@ -137,7 +199,6 @@ async function persist(){
   await idbSet(DB_KEY, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
 }
 
-// ---------- Lectura / escritura protegidas ----------
 export function query(sql, params=[]){
   if (!db) return [];
   const res = db.exec(sql, params);
@@ -163,4 +224,14 @@ export async function exec(sql, params=[]){
 
 export function exportBytes(){
   return db ? db.export() : new Uint8Array();
+}
+
+// ---------- Conversión universal de una moneda a otra en todas las tablas ----------
+export async function convertCurrency(fromCur, toCur, rate){
+  if (!fromCur || !toCur || !rate || rate <= 0) return;
+  rawRun("UPDATE transacciones SET monto = ROUND(monto * ?, 2), moneda = ? WHERE moneda = ?", [rate, toCur, fromCur]);
+  rawRun("UPDATE cuentas SET monto = ROUND(monto * ?, 2), moneda = ? WHERE moneda = ?", [rate, toCur, fromCur]);
+  rawRun("UPDATE productos SET precio = ROUND(precio * ?, 2), moneda = ? WHERE moneda = ?", [rate, toCur, fromCur]);
+  rawRun("UPDATE catalogo SET precio = ROUND(precio * ?, 2), moneda = ? WHERE moneda = ?", [rate, toCur, fromCur]);
+  await commit();
 }

@@ -14,7 +14,7 @@
      1. AJUSTES GENERALES (comunes a PC y celular)
      ========================================================= */
   main {
-    padding-bottom: 140px; /* Evita que la barra inferior tape el contenido al hacer scroll */
+    padding-bottom: 140px;
   }
 
   .month-strip {
@@ -40,7 +40,6 @@
     padding: 0.4rem 0.6rem;
   }
 
-  /* Barras de herramientas por defecto para las otras pestañas */
   .tools-bar {
     display: flex;
     flex-wrap: wrap;
@@ -51,10 +50,61 @@
   }
 
   /* =========================================================
-     2. MÓVIL (Por defecto: celulares y pantallas de hasta 768px)
+     2. PANEL DE MONEDA Y DESGLOSES MULTIMONEDA
      ========================================================= */
-  
-  /* Bloques de resumen: exactamente 2 columnas x 2 filas */
+  .currency-panel {
+    background: rgba(31, 43, 34, 0.04);
+    border: 1px solid rgba(31, 43, 34, 0.12);
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 1.2rem;
+  }
+
+  .currency-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+  }
+
+  .currency-selector-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .sec-currency-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fff;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid rgba(31, 43, 34, 0.15);
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+
+  .metric-multicurrency {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.95rem;
+    margin-top: 0.2rem;
+  }
+
+  .metric-subrow {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.88rem;
+  }
+
+  /* =========================================================
+     3. MÓVIL (Por defecto: celulares y pantallas de hasta 768px)
+     ========================================================= */
   .cards-row {
     display: grid !important;
     grid-template-columns: repeat(2, 1fr) !important;
@@ -63,11 +113,10 @@
   }
   .cards-row .metric {
     width: 100% !important;
-    min-width: 0 !important; /* Previene desbordes en pantallas chicas */
+    min-width: 0 !important;
     box-sizing: border-box;
   }
 
-  /* Filtros en celular: botones arriba, fechas abajo */
   #panel-dash .tools-bar {
     display: flex;
     flex-direction: column;
@@ -121,20 +170,18 @@
   }
 
   /* =========================================================
-     3. PC / ESCRITORIO (Pantallas mayores a 768px)
+     4. PC / ESCRITORIO (Pantallas mayores a 768px)
      ========================================================= */
   @media (min-width: 769px) {
     main {
       padding-bottom: 80px;
     }
 
-    /* Bloques de resumen: las 4 tarjetas en una sola fila horizontal */
     .cards-row {
       grid-template-columns: repeat(4, 1fr) !important;
       gap: 1rem !important;
     }
 
-    /* En PC: botones a la izquierda, fechas a la derecha en una sola fila */
     #panel-dash .tools-bar {
       flex-direction: row;
       justify-content: space-between;
@@ -225,6 +272,20 @@
       </div>
     </div>
 
+    <!-- Panel de Divisas (ubicado debajo de las tarjetas de resumen) -->
+    <div class="currency-panel">
+      <div class="currency-header">
+        <div class="currency-selector-wrap">
+          <label><strong>Moneda principal:</strong></label>
+          <select id="sel-main-currency"></select>
+        </div>
+        <a href="https://www.xe.com/es/currencyconverter/" target="_blank" rel="noopener" class="btn ghost" style="text-decoration:none; font-size:0.8rem; padding:0.3rem 0.6rem;">
+          ↗ Consultar cotizaciones oficiales (XE.com)
+        </a>
+      </div>
+      <div id="currency-secondary-wrap"></div>
+    </div>
+
     <table class="ledger" id="tabla-recientes">
       <thead>
         <tr><th>Fecha</th><th>Tipo</th><th>Pago</th><th>Descripción</th><th>Monto</th></tr>
@@ -245,6 +306,9 @@
       </div>
       <div class="field"><label>Cantidad</label><input name="cantidad" type="number" step="1" min="1" value="1"></div>
       <div class="field"><label>Monto</label><input name="monto" type="number" step="0.01" required></div>
+      <div class="field"><label>Moneda</label>
+        <select name="moneda" class="currency-select-live"></select>
+      </div>
       <div class="field"><label>Forma de pago</label>
         <select name="forma_pago">
           <option value="efectivo">Efectivo</option>
@@ -290,6 +354,9 @@
     <form class="entry" id="form-inv">
       <div class="field"><label>Producto</label><input name="nombre" required></div>
       <div class="field"><label>Precio</label><input name="precio" type="number" step="0.01" required></div>
+      <div class="field"><label>Moneda</label>
+        <select name="moneda" class="currency-select-live"></select>
+      </div>
       <div class="field"><label>Stock</label><input name="stock" type="number" required></div>
       <div class="field"><label>Stock mínimo</label><input name="stock_minimo" type="number" value="1"></div>
       <button type="submit">Agregar</button>
@@ -317,6 +384,10 @@
         <input name="precio" type="number" step="0.01" required placeholder="0.00">
       </div>
       <div class="field">
+        <label>Moneda</label>
+        <select name="moneda" class="currency-select-live"></select>
+      </div>
+      <div class="field">
         <label>Descripción (opcional)</label>
         <input name="descripcion" placeholder="Ej: 100% algodón, talles S al XL">
       </div>
@@ -337,7 +408,6 @@
       <button type="button" class="btn gold" id="btn-descargar-pdf-cat">Descargar Catálogo en PDF</button>
     </div>
 
-    <!-- Grilla de productos del catálogo -->
     <div class="cat-grid" id="cat-grid"></div>
   </section>
 
@@ -349,6 +419,9 @@
         <select name="tipo"><option value="por_cobrar">Me deben (cliente)</option><option value="por_pagar">Debo (proveedor)</option></select>
       </div>
       <div class="field"><label>Monto</label><input name="monto" type="number" step="0.01" required></div>
+      <div class="field"><label>Moneda</label>
+        <select name="moneda" class="currency-select-live"></select>
+      </div>
       <div class="field"><label>Vence</label><input name="vencimiento" type="date"></div>
       <button type="submit">Registrar deuda</button>
     </form>
@@ -376,7 +449,41 @@
   </div>
 </div>
 
-<!-- Modal dinámico para opciones de envío (adaptado a Celular y PC) -->
+<!-- Modal para conversión de una moneda a otra -->
+<div class="modal-overlay" id="modal-convert">
+  <div class="modal" style="max-width: 440px;">
+    <h3 id="modal-convert-title">Convertir moneda</h3>
+    <p id="modal-convert-desc" style="font-size:0.88rem; color:#4A5A4E; margin:0.6rem 0 1rem; line-height:1.4;"></p>
+    <div class="field">
+      <label id="modal-convert-label">Tipo de cambio:</label>
+      <input type="number" id="modal-convert-rate" step="0.0001" min="0.00001" placeholder="Ej: 41.50" required>
+    </div>
+    <div style="margin-top:0.8rem; font-size:0.8rem; background:rgba(31,43,34,0.05); padding:0.6rem; border-radius:4px; line-height:1.4;">
+      ⚠️ Esta acción recalculará todas las transacciones, deudas y productos de esa divisa hacia la moneda principal en este momento.
+    </div>
+    <div class="modal-actions" style="margin-top:1.2rem;">
+      <button class="btn ghost" id="modal-convert-cancel" type="button">Cancelar</button>
+      <button class="btn" id="modal-convert-confirm" type="button">Aplicar conversión ahora</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de advertencia si cambia la ubicación regional del navegador -->
+<div class="modal-overlay" id="modal-location">
+  <div class="modal" style="max-width: 440px;">
+    <h3>📍 Cambio de ubicación detectado</h3>
+    <p id="modal-location-text" style="font-size:0.88rem; color:#4A5A4E; margin:0.8rem 0; line-height:1.4;"></p>
+    <div style="font-size:0.8rem; color:#666; margin-bottom:1rem; line-height:1.4;">
+      💡 <em>Nota: Tus registros y valores numéricos históricos no se alterarán. Solo cambiará la moneda predeterminada y el orden de visualización.</em>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="modal-location-keep" type="button">Mantener actual</button>
+      <button class="btn" id="modal-location-change" type="button">Cambiar moneda principal</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para opciones de envío (adaptado a Celular y PC) -->
 <div class="modal-overlay" id="modal-share">
   <div class="modal" style="max-width: 440px;">
     <h3>Enviar copia a otro dispositivo</h3>
@@ -385,32 +492,21 @@
     </p>
 
     <div style="display: flex; flex-direction: column; gap: 0.6rem;">
-      <!-- Opción exclusiva para celular: reintentar menú nativo -->
       <button type="button" class="btn gold" id="share-opt-native" style="display:none; text-align: left;">
         📲 Abrir menú del teléfono (Bluetooth, apps, etc.)
       </button>
-
-      <!-- Opción exclusiva para celular: Bluetooth directo -->
       <button type="button" class="btn" id="share-opt-bt" style="display:none; text-align: left; background:#1F4E79; color:#fff;">
         🔵 Enviar por Bluetooth / Quick Share
       </button>
-
-      <!-- WhatsApp: Abre la app en celular o Web en PC -->
       <button type="button" class="btn" id="share-opt-wa" style="text-align: left;">
         💬 Enviar por WhatsApp
       </button>
-
-      <!-- Telegram: Abre la app en celular o Web en PC -->
       <button type="button" class="btn" id="share-opt-tg" style="text-align: left;">
         ✈️ Enviar por Telegram
       </button>
-
-      <!-- Correo: abre la app de correo por mailto -->
       <a href="mailto:?subject=Copia%20de%20respaldo%20Libro&body=Adjunto%20el%20archivo%20de%20respaldo%20de%20mi%20negocio." class="btn ghost" style="text-align: left; text-decoration: none;">
         ✉️ Enviar por Correo electrónico
       </a>
-
-      <!-- Descarga estándar -->
       <button type="button" class="btn ghost" id="share-opt-descargar" style="text-align: left;">
         💾 Solo descargar archivo (.sqlite)
       </button>
@@ -437,7 +533,6 @@
   <button id="update-reload" type="button">Actualizar ahora</button>
 </div>
 
-<!-- Librería local para exportar PDFs -->
 <script src="./vendor/jspdf.umd.min.js"></script>
 <script type="module" src="./js/main.js"></script>
 </body>
